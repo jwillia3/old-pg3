@@ -23,6 +23,7 @@ Bugs
 - Fonts
   - Font Indexes
   - Font listing and selection
+    - Fix default font hardcoding
   - CFF/Postscript outlines
   - Family name
   - Compound glyphs

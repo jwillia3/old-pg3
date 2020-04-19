@@ -115,7 +115,7 @@ struct OpenTypeFont {
 
 typedef struct BoxMethods {
     void        (*key)(Box *box, unsigned code, unsigned mod);
-    void        (*chars)(Box *box, char *text);
+    void        (*chars)(Box *box, const char *text);
     void        (*clicked)(Box *box, int x, int y);
     void        (*draw)(Box *box, Canvas *g);
     void        (*pack)(Box *box);
@@ -236,25 +236,28 @@ Box *pggetfocus();
 void pgaddbox(Box *parent, Box *child);
 void pgremovebox(Box *child);
 void pgpack(Box *box);
+Box *pgoverridebox(Box *box, BoxMethods meth);
 
 Box *pglocate(Box *box, int x, int y);
 Canvas *pgboxsubcanvas(Canvas *g, Box *box);
 
 void pgboxclicked(Box *box, int x, int y);
 void pgboxkey(Box *box, unsigned code, unsigned mod);
-void pgboxchars(Box *box, char *text);
+void pgboxchars(Box *box, const char *text);
 void pgdrawbox(Canvas *g, Box *box);
 
+Box *pgbox(BoxMethods *methods);
 Box *pgstackbox(bool horizontal);
 Box *pglabel(char *text);
 Box *pgtextbox(TextBoxData *data);
 Box *pgbutton(char *text);
 
-TextBoxData *pgtextboxdata(char *text);
+TextBoxData *pgtextboxdata(const char *text);
 
 Font *pgthemefont();
 Colour pgthemefg();
 Colour pgthemebg();
+Colour pgthemebg2();
 Colour pgthemeaccent();
 
 
@@ -268,6 +271,8 @@ uint8_t *pgtoutf8(uint8_t **out, unsigned c);
 static inline Point pt(float x, float y);
 static inline Point pgaddpt(Point a, Point b);
 static inline Point pgsubpt(Point a, Point b);
+static inline Point pgmulpt(Point a, Point b);
+static inline Point pgdivpt(Point a, Point b);
 static inline Colour rgba(float r, float g, float b, float a);
 static inline Colour rgb(float r, float g, float b);
 static inline uint32_t packrgb(Colour colour);
@@ -286,6 +291,14 @@ static inline Point pgaddpt(Point a, Point b) {
 
 static inline Point pgsubpt(Point a, Point b) {
     return (Point){ a.x - b.x, a.y - b.y };
+}
+
+static inline Point pgmulpt(Point a, Point b) {
+    return (Point){ a.x * b.x, a.y * b.y };
+}
+
+static inline Point pgdivpt(Point a, Point b) {
+    return (Point){ a.x / b.x, a.y / b.y };
 }
 
 static inline Colour rgba(float r, float g, float b, float a) {

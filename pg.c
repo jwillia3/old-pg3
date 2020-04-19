@@ -12,7 +12,7 @@
 
 #include <pg.h>
 
-#define FLATNESS 1.01f
+#define FLATNESS 1.00f
 #define BEZ_LIMIT 7
 
 #define new(t,...) memcpy(malloc(sizeof(t)), &(t) { __VA_ARGS__ }, sizeof(t))
@@ -28,8 +28,8 @@ typedef struct {
 
 static Font     *themefont;
 static float    themefontsz = 14.0f * 96 / 72;
-// static Colour   themebg = {1, .975, .925, 1};
 static Colour   themebg = {1, 1, 1, 1};
+static Colour   themebg2 = {.9, .9, .9, 1};
 static Colour   themefg = {.2, .2, .2, 1};
 static Colour   themeaccent = {1, .2, .5, 1};
 
@@ -755,7 +755,6 @@ static const CanvasMethods bitmapmethods = {
     bmp_strokefill,
 };
 
-
 /*
 
     Fonts.
@@ -906,7 +905,7 @@ void otf_setcm(Font *font, CTM ctm) {
 void otf_glyph(Canvas *g, Font *font, Point p, unsigned glyph) {
     OpenTypeFont    *otf = (OpenTypeFont*) font;
 
-    CTM         ctm = {1, 0, 0, -1, 0, font->ascent + font->descent };
+    CTM         ctm = {1, 0, 0, -1, 0, font->ascent };
     ctm = pgmulctm(ctm, font->ctm);
     ctm.e += p.x;       // Canvas co-ordinates; not scaled.
     ctm.f += p.y;       // Canvas co-ordinates; not scaled.
@@ -1114,8 +1113,8 @@ static Font *otf_openfont(void * restrict data, size_t size, int index) {
     longloca = pkw(head + 50);
 
     // hhea table.
-    ascent = pkw(hhea + 2);
-    descent = pkw(hhea + 4);
+    ascent = (int16_t) pkw(hhea + 4);
+    descent = (int16_t) pkw(hhea + 6);
     nhmetrics = pkw(hhea + 34);
     if (nhmetrics > nglyphs)
         goto fail;
@@ -1239,6 +1238,10 @@ Colour pgthemebg() {
     return themebg;
 }
 
+Colour pgthemebg2() {
+    return themebg2;
+}
+
 Colour pgthemeaccent() {
     return themeaccent;
 }
@@ -1323,9 +1326,9 @@ void pgboxkey(Box *box, unsigned code, unsigned mod) {
     }
 }
 
-void pgboxchars(Box *box, char *text) {
+void pgboxchars(Box *box, const char *text) {
     if (box) {
-        if (box->_->key)
+        if (box->_->chars)
             box->_->chars(box, text);
         else if (box->parent)
             pgboxchars(box->parent, text);
@@ -1354,6 +1357,34 @@ void pgpack(Box *box) {
     }
 }
 
+Box *pgoverridebox(Box *box, BoxMethods meth) {
+    if (!box->_)
+        box->_ = &pgbox_default;
+
+    box->_ = new(BoxMethods,
+        meth.key? meth.key: box->_->key,
+        meth.chars? meth.chars: box->_->chars,
+        meth.clicked? meth.clicked: box->_->clicked,
+        meth.draw? meth.draw: box->_->draw,
+        meth.pack? meth.pack: box->_->pack,
+    );
+    return box;
+}
+
+static void defaultpack(Box *box) {
+    for (Box *i = box->children; i; i = i->next) {
+        i->x = 0;
+        i->y = 0;
+        i->width = box->width;
+        i->height = box->height;
+        pgpack(i);
+    }
+}
+
+static void defaultdraw(Box *box, Canvas *g) {
+    (void) box;
+    pgclear(g, pgthemebg());
+}
 
 static void horizpack(Box *box) {
     if (box) {
@@ -1362,7 +1393,7 @@ static void horizpack(Box *box) {
         int     x = 0;
         for (Box *i = box->children; i; i = i->next) {
             if (i->fixed)
-                remaining -= i->height;
+                remaining -= i->width;
             else
                 n++;
         }
@@ -1433,7 +1464,11 @@ Box *pgbutton(char *text) {
         .sys = (uintptr_t) text);
 }
 
-TextBoxData *pgtextboxdata(char *text) {
+Box *pgbox(BoxMethods *methods) {
+    return new(Box, ._ = methods? methods: &pgbox_default);
+}
+
+TextBoxData *pgtextboxdata(const char *text) {
     if (!text)
         text = "";
 
@@ -1540,14 +1575,16 @@ static void textbox_key(Box *box, unsigned code, unsigned mod) {
 
 }
 
-static void textbox_chars(Box *box, char *text) {
+static void textbox_chars(Box *box, const char *text) {
     TextBoxData     *data = (TextBoxData*) box->sys;
     int             len = strlen(data->buf);
+    int             shift = strlen(text);
     memmove(
-        data->buf + data->caret + 1,
+        data->buf + data->caret + shift,
         data->buf + data->caret,
         len - data->caret);
-    data->buf[data->caret++] = *text;
+    memmove(data->buf + data->caret, text, shift);
+    data->caret += shift;
     box->clean = false;
 }
 
@@ -1592,7 +1629,8 @@ static void button_draw(Box *box, Canvas *g) {
 */
 
 const BoxMethods pgbox_default = {
-
+    .pack = defaultpack,
+    .draw = defaultdraw,
 };
 
 const BoxMethods pgbox_horizstack = {
